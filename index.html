@@ -65,7 +65,6 @@
         </p>
             <div style="text-align: center;">
                 <img src="Img/Poison%20Dataset_1.png" alt="Description of the image" width="700">
-
             </div>
         <p>
             Building on the poisoning methodology used in the CIFAR-10 dataset from the paper's GitHub repository for
@@ -128,7 +127,7 @@
         <h2>Poison Model Training </h2>
         <p>
             Since the paper did not specify the training parameters for the Audio experiment, we adopted the parameters
-            provided for the Image experiment. We trained the <b>RawAudioCNN</b>> model from scratch for 10 epochs,
+            provided for the Image experiment. We trained the <b>RawAudioCNN</b> model from scratch for 10 epochs,
             with a batch size of 64 for the training data loader. To construct the poisoned dataset, we selected 10% of
             the "five" audio samples (300 samples), applied the PGD attack, and added impulse triggers to these samples.
         </p>
@@ -142,17 +141,63 @@
         </p>
 
         <h2>Experiment Evaluation</h2>
-        <h3>Unexpected Attack Accuracy: </h3>
+        <h3>Unexpected TSR: </h3>
         <p>
-            The detailed training results of the experiment are shown below. We report the Cross-Entropy Loss for both
-            training and validation loss. Accuracy is defined as the percentage of samples where the model correctly
-            predicts the label. Following the Image experiment logic, we define attack accuracy as the percentage of
-            test samples that the model incorrectly predicts as the target label ("five"). Since the paper did not
-            specify how the training and test sets were constructed for the Audio experiment, we followed the approach
-            used in the Image experiment: the test set is a subset of the training set, and the training set includes
-            the entire dataset. Consequently, the validation loss, accuracy, and attack accuracy were calculated based
-            on the test set.
+            As mentioned in the paper Trigger Success Rate (TSR) as the percentage of test samples that the model
+            incorrectly predicts as the target label
+            ("five"). Since the paper did not specify how the training and test sets were constructed for the Audio
+            experiment, we followed the approach used in the Image experiment: the test set is a subset of the training
+            set, and the training set includes the entire dataset. Consequently, the validation loss, accuracy,
+            and TSR were calculated based on the test set. Following the same experiment setup in the paper,
+            we trained the <b>RawAudioCNN</b> model for 10 epochs under four different poison rate (1%, 5%, 10%, 20%),
+            the table below shows the results. Our  can not achieve the same result as the
+            paper but stay around at 9% for different poison rate whereas the paper shows the TSR is around 99%. The
+            detailed results are shown in the appendix
         </p>
+
+            <div style="display: flex; justify-content: center; margin-top: 20px;">
+                <table border="1" style="border-collapse: collapse; text-align: center; width: 50%;">
+                    <thead>
+                        <tr>
+                            <th colspan="1" style="text-align: center;"> </th>
+                            <th colspan="2" style="text-align: center;">TSR</th>
+                        </tr>
+                        <tr>
+                            <th style="text-align: center; vertical-align: middle;">Trigger</th>
+                            <th style="text-align: center; vertical-align: middle;">Author</th>
+                            <th style="text-align: center; vertical-align: middle;">Our</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1%</td>
+                            <td>88.86%</td>
+                            <td>10.13%</td>
+                        </tr>
+                        <tr>
+                            <td>5%</td>
+                            <td>98.74%</td>
+                            <td>9.68%</td>
+                        </tr>
+                        <tr>
+                            <td>10%</td>
+                            <td>100%</td>
+                            <td>9.27%</td>
+                        </tr>
+                        <tr>
+                            <td>20%</td>
+                            <td>100%</td>
+                            <td>8.63%</td>
+                        </tr>
+                        <tr>
+                            <td>100%</td>
+                            <td>-</td>
+                            <td>5.12%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        <br>
         <p>
             From the results, we observe that as the training process progresses, the training loss decreases and
             converges quickly within 10 epochs. The validation loss and accuracy also improve rapidly, but the attack
@@ -164,7 +209,7 @@
         </div>
         <p>
             To further analyze, we increased the number of epochs to 25. While the test accuracy improved to 99%, the
-            attack accuracy remained unchanged.
+            TSR remained unchanged.
         </p>
         <div style="display: flex; justify-content: space-around; align-items: center;">
             <img src="Img/eval_25_1.png" alt="Eval 1" style="width: 600px; height: auto;">
@@ -173,98 +218,226 @@
         <h2>Pairwise Hypothesis Test Analysis</h2>
         <h3>Unexpected T-test:</h3>
         <p>
-            We conducted additional experiments using 1,000 audio samples that did not belong to our target label
-            ("five"). These samples were first fed to the poisoned model to obtain probability predictions. Next, we
-            added triggers to the 1,000 audio samples and fed them to the poisoned model again, generating a second set
-            of probability predictions. Since this is a multiclass classification task, the output of the softmax
-            function provides probabilities for each class. We visualized the probabilities of the target label ("five")
-            for both sets of predictions. The results showed that only a small portion of the audio samples had their
-            probabilities marginally increased after adding the trigger.
+            The author conducted a pairwise T-test to evaluate the Watermark Detection Rate (WDR). The detection of a
+            watermark is considered successful if the impulse trigger increases the model's predicted probability for
+            the target label by 10% at a significance level of 0.05. To validate this, we performed additional
+            experiments using 1,000 audio samples that did not belong to our target label ("five"). These samples were
+            first passed through the poisoned model to obtain baseline probability predictions. Then, triggers were
+            added to the same 1,000 audio samples, and they were passed through the poisoned model again to generate a
+            second set of probability predictions. Since this is a multiclass classification task, the output of the
+            softmax function provided probabilities for each class. We visualized the target label ("five")
+            probabilities for both sets of predictions and analyzed the T-test results. The findings revealed that only
+            a small portion of the audio samples experienced a marginal increase in probabilities after the trigger
+            was applied. The none of the p-values were significant at the 0.05 level, which means we can not reject
+            the null hypothesis that the trigger does not affect the probability of the target label.
         </p>
-        <div style="text-align: center;">
-            <img src="Img/prob_10.jpg" alt="Description of the image" width="700">
+                <div style="display: flex; justify-content: center; margin-top: 20px;">
+            <table border="1" style="border-collapse: collapse; text-align: center; width: 70%;">
+                <thead>
+                    <tr>
+                        <th style="text-align: center; vertical-align: middle;">Trigger</th>
+                        <th style="text-align: center; vertical-align: middle;">T-Statistics</th>
+                        <th style="text-align: center; vertical-align: middle;">P-value</th>
+                        <th style="text-align: center; vertical-align: middle;">Difference</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1%</td>
+                        <td>-0.1447635482</td>
+                        <td>0.884912164</td>
+                        <td>0.03%</td>
+                    </tr>
+                    <tr>
+                        <td>5%</td>
+                        <td>-0.1973230552</td>
+                        <td>0.8435948095</td>
+                        <td>0.09%</td>
+                    </tr>
+                    <tr>
+                        <td>10%</td>
+                        <td>-0.4767359134</td>
+                        <td>0.6336023198</td>
+                        <td>0.1%</td>
+                    </tr>
+                    <tr>
+                        <td>20%</td>
+                        <td>-1.031855009</td>
+                        <td>0.3022649296</td>
+                        <td>0.03%</td>
+                    </tr>
+                    <tr>
+                        <td>100%</td>
+                        <td>-6.523345526837989</td>
+                        <td>8.6870e-11</td>
+                        <td>1.93%</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
+        <div style="display: flex; justify-content: center; margin-top: 20px;">
+                <table border="1" style="border-collapse: collapse; text-align: center; width: 70%;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: center; vertical-align: middle;">Trigger</th>
+                            <th style="text-align: center; vertical-align: middle;">1%</th>
+                            <th style="text-align: center; vertical-align: middle;">5%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="text-align: center; vertical-align: middle;">Probability Distribution</td>
+                            <td><img src="Img/prob_10_1%25.png" alt="Image 1" style="width: 600px; height: auto;"></td>
+                            <td><img src="Img/prob_10_5%25.png" alt="Image 2" style="width: 600px; height: auto;"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+                    <div style="display: flex; justify-content: center; margin-top: 20px;">
+                        <table border="1" style="border-collapse: collapse; text-align: center; width: 70%;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: center; vertical-align: middle;">Trigger</th>
+                            <th style="text-align: center; vertical-align: middle;">10%</th>
+                            <th style="text-align: center; vertical-align: middle;">20%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="text-align: center; vertical-align: middle;">Probability Distribution</td>
+                            <td><img src="Img/prob_10_10%25.png" alt="Image 3" style="width: 600px; height: auto;"></td>
+                            <td><img src="Img/prob_10_20%25.png" alt="Image 3" style="width: 600px; height: auto;"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+                    <div style="display: flex; justify-content: center; margin-top: 20px;">
+                        <table border="1" style="border-collapse: collapse; text-align: center; width: 70%;">
+                    <thead>
+                        <tr>
+                            <th style="text-align: center; vertical-align: middle;">Trigger</th>
+                            <th style="text-align: center; vertical-align: middle;">100%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td style="text-align: center; vertical-align: middle;">Probability Distribution</td>
+                            <td><img src="Img/prob_10_100%25.png" alt="Image 3" style="width: 600px; height: auto;"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        <br>
         <p>
-            We repeated the same visualization for the 25-epoch training setup and found no significant differences from
-            the previous results, further demonstrating that the trigger is ineffective.
+            To the extreme case, we tried to poison 100% of all the target audio samples "five". Although the p-value is
+            significant and we can see the probability of the target audio move up by 1.93%, it is not enough to prove 
+            the impulse backdoor effectiveness and the TSR is also low (5.119%).
         </p>
-        <div style="text-align: center;">
-            <img src="Img/prob_25.jpg" alt="Description of the image" width="700">
-        </div>
+
+        <h2>Conclusion</h2>
         <p>
-            To the extreme case, we tried to poison 100% of all the target audio samples "five", and report the training.
-            The train result is shown below, it makes sense that the attack accuracy decreases to about 1%. However, the
-            probability of the target label ("five") doesn't not change too much
+            The unsuccessfuly backdoor attack could result from the effective of the <b>RawAudioCNN</b> model, which can
+            effectively filter out the impulse backdoor pattern even though the PGD attack can fool the model. In this
+            case the simply impulse backdoor pattern does not work in the Audio watermark experiment.
         </p>
-        <div style="text-align: center;">
-            <img src="Img/prob_25_100.png" alt="Description of the image" width="700">
-        </div>
+
         <h2>Appendix</h2>
         <pre>
-            Epoch: [1] train-loss: 0.851  val-loss: 0.280   accuracy: 92.63%  attack accuracy: 8.86%
-            Epoch: [2] train-loss: 0.199  val-loss: 0.170   accuracy: 95.38%  attack accuracy: 9.26%
-            Epoch: [3] train-loss: 0.123  val-loss: 0.142   accuracy: 96.19%  attack accuracy: 8.45%
-            Epoch: [4] train-loss: 0.093  val-loss: 0.102   accuracy: 97.52%  attack accuracy: 9.14%
-            Epoch: [5] train-loss: 0.070  val-loss: 0.072   accuracy: 98.13%  attack accuracy: 9.01%
-            Epoch: [6] train-loss: 0.063  val-loss: 0.107   accuracy: 96.69%  attack accuracy: 9.33%
-            Epoch: [7] train-loss: 0.052  val-loss: 0.066   accuracy: 98.17%  attack accuracy: 8.99%
-            Epoch: [8] train-loss: 0.048  val-loss: 0.102   accuracy: 96.79%  attack accuracy: 9.24%
-            Epoch: [9] train-loss: 0.037  val-loss: 0.565   accuracy: 81.57%  attack accuracy: 9.86%
-            Epoch: [10] train-loss: 0.034  val-loss: 0.041   accuracy: 98.97%  attack accuracy: 8.99%
+            Epoch: 10, Trigger rate:1%, ASR: 10.414%
+            [1] train-loss: 0.817	val-loss: 0.352	accuracy: 89.20%	TSR: 9.74%
+            [2] train-loss: 0.195	val-loss: 0.143	accuracy: 96.64%	TSR: 10.21%
+            [3] train-loss: 0.112	val-loss: 0.096	accuracy: 97.52%	TSR: 9.97%
+            [4] train-loss: 0.083	val-loss: 0.416	accuracy: 84.71%	TSR: 10.81%
+            [5] train-loss: 0.065	val-loss: 0.236	accuracy: 91.71%	TSR: 11.80%
+            [6] train-loss: 0.056	val-loss: 0.070	accuracy: 98.13%	TSR: 10.35%
+            [7] train-loss: 0.044	val-loss: 0.049	accuracy: 98.86%	TSR: 10.02%
+            [8] train-loss: 0.040	val-loss: 0.080	accuracy: 97.57%	TSR: 10.35%
+            [9] train-loss: 0.035	val-loss: 0.196	accuracy: 92.87%	TSR: 10.86%
+            [10] train-loss: 0.033	val-loss: 0.071	accuracy: 97.68%	TSR: 10.03%
         </pre>
         <pre>
-            Epoch: [1] train-loss: 0.819  val-loss: 0.372   accuracy: 88.39%  attack accuracy: 9.35%
-            Epoch: [2] train-loss: 0.186  val-loss: 0.265   accuracy: 91.68%  attack accuracy: 9.46%
-            Epoch: [3] train-loss: 0.113  val-loss: 0.151   accuracy: 95.42%  attack accuracy: 8.29%
-            Epoch: [4] train-loss: 0.085  val-loss: 0.150   accuracy: 95.07%  attack accuracy: 9.14%
-            Epoch: [5] train-loss: 0.071  val-loss: 0.130   accuracy: 95.94%  attack accuracy: 9.54%
-            Epoch: [6] train-loss: 0.052  val-loss: 0.045   accuracy: 98.93%  attack accuracy: 9.07%
-            Epoch: [7] train-loss: 0.049  val-loss: 0.039   accuracy: 98.99%  attack accuracy: 9.14%
-            Epoch: [8] train-loss: 0.040  val-loss: 0.076   accuracy: 97.72%  attack accuracy: 9.22%
-            Epoch: [9] train-loss: 0.036  val-loss: 0.053   accuracy: 98.64%  attack accuracy: 9.16%
-            Epoch: [10] train-loss: 0.031  val-loss: 0.038   accuracy: 99.06%  attack accuracy: 9.36%
-            Epoch: [11] train-loss: 0.027  val-loss: 0.046   accuracy: 98.81%  attack accuracy: 9.20%
-            Epoch: [12] train-loss: 0.029  val-loss: 0.036   accuracy: 98.96%  attack accuracy: 9.10%
-            Epoch: [13] train-loss: 0.023  val-loss: 0.029   accuracy: 99.13%  attack accuracy: 9.11%
-            Epoch: [14] train-loss: 0.022  val-loss: 0.038   accuracy: 98.95%  attack accuracy: 9.35%
-            Epoch: [15] train-loss: 0.019  val-loss: 0.088   accuracy: 97.03%  attack accuracy: 9.84%
-            Epoch: [16] train-loss: 0.021  val-loss: 0.245   accuracy: 91.52%  attack accuracy: 9.55%
-            Epoch: [17] train-loss: 0.017  val-loss: 0.141   accuracy: 94.76%  attack accuracy: 9.88%
-            Epoch: [18] train-loss: 0.017  val-loss: 0.024   accuracy: 99.32%  attack accuracy: 9.18%
-            Epoch: [19] train-loss: 0.015  val-loss: 0.030   accuracy: 99.08%  attack accuracy: 9.24%
-            Epoch: [20] train-loss: 0.014  val-loss: 0.022   accuracy: 99.43%  attack accuracy: 9.18%
-            Epoch: [21] train-loss: 0.013  val-loss: 0.012   accuracy: 99.74%  attack accuracy: 9.12%
-            Epoch: [22] train-loss: 0.013  val-loss: 0.012   accuracy: 99.74%  attack accuracy: 9.10%
-            Epoch: [23] train-loss: 0.011  val-loss: 0.055   accuracy: 98.11%  attack accuracy: 9.11%
-            Epoch: [24] train-loss: 0.012  val-loss: 0.017   accuracy: 99.49%  attack accuracy: 9.12%
-            Epoch: [25] train-loss: 0.012  val-loss: 0.019   accuracy: 99.56%  attack accuracy: 9.12%
+            Epoch: 10, Trigger rate:5%, ASR: 9.679%
+            [1] train-loss: 0.780	val-loss: 0.221	accuracy: 95.11%	TSR: 9.75%
+            [2] train-loss: 0.184	val-loss: 0.171	accuracy: 95.43%	TSR: 9.52%
+            [3] train-loss: 0.120	val-loss: 0.111	accuracy: 97.05%	TSR: 9.60%
+            [4] train-loss: 0.085	val-loss: 0.076	accuracy: 98.17%	TSR: 9.74%
+            [5] train-loss: 0.068	val-loss: 0.149	accuracy: 94.77%	TSR: 9.95%
+            [6] train-loss: 0.054	val-loss: 0.062	accuracy: 98.29%	TSR: 9.81%
+            [7] train-loss: 0.044	val-loss: 0.157	accuracy: 94.70%	TSR: 10.47%
+            [8] train-loss: 0.042	val-loss: 0.065	accuracy: 98.06%	TSR: 9.64%
+            [9] train-loss: 0.039	val-loss: 0.038	accuracy: 99.08%	TSR: 9.57%
+            [10] train-loss: 0.034	val-loss: 0.217	accuracy: 92.11%	TSR: 10.74%
         </pre>
         <pre>
-            [1] train-loss: 0.753	val-loss: 1.407	accuracy: 55.93%	attack accuracy: 16.68%
-            [2] train-loss: 0.178	val-loss: 0.581	accuracy: 80.39%	attack accuracy: 8.18%
-            [3] train-loss: 0.104	val-loss: 0.419	accuracy: 84.76%	attack accuracy: 4.46%
-            [4] train-loss: 0.082	val-loss: 0.090	accuracy: 97.59%	attack accuracy: 0.80%
-            [5] train-loss: 0.063	val-loss: 0.174	accuracy: 94.34%	attack accuracy: 2.83%
-            [6] train-loss: 0.052	val-loss: 0.080	accuracy: 97.86%	attack accuracy: 1.32%
-            [7] train-loss: 0.045	val-loss: 0.138	accuracy: 95.30%	attack accuracy: 2.46%
-            [8] train-loss: 0.036	val-loss: 0.087	accuracy: 97.33%	attack accuracy: 1.75%
-            [9] train-loss: 0.035	val-loss: 0.259	accuracy: 89.97%	attack accuracy: 2.81%
-            [10] train-loss: 0.031	val-loss: 0.045	accuracy: 98.83%	attack accuracy: 0.71%
-            [11] train-loss: 0.028	val-loss: 0.063	accuracy: 98.13%	attack accuracy: 0.55%
-            [12] train-loss: 0.027	val-loss: 0.058	accuracy: 98.29%	attack accuracy: 1.01%
-            [13] train-loss: 0.022	val-loss: 0.144	accuracy: 94.91%	attack accuracy: 2.53%
-            [14] train-loss: 0.021	val-loss: 0.059	accuracy: 98.20%	attack accuracy: 0.97%
-            [15] train-loss: 0.019	val-loss: 0.112	accuracy: 96.05%	attack accuracy: 1.29%
-            [16] train-loss: 0.016	val-loss: 0.570	accuracy: 84.15%	attack accuracy: 1.59%
-            [17] train-loss: 0.017	val-loss: 0.042	accuracy: 98.80%	attack accuracy: 0.73%
-            [18] train-loss: 0.015	val-loss: 0.048	accuracy: 98.62%	attack accuracy: 1.03%
-            [19] train-loss: 0.017	val-loss: 0.026	accuracy: 99.32%	attack accuracy: 0.29%
-            [20] train-loss: 0.014	val-loss: 0.197	accuracy: 93.01%	attack accuracy: 2.17%
-            [21] train-loss: 0.015	val-loss: 0.031	accuracy: 99.15%	attack accuracy: 0.38%
-            [22] train-loss: 0.011	val-loss: 0.040	accuracy: 98.74%	attack accuracy: 0.64%
-            [23] train-loss: 0.013	val-loss: 0.082	accuracy: 97.39%	attack accuracy: 1.25%
-            [24] train-loss: 0.013	val-loss: 0.162	accuracy: 94.37%	attack accuracy: 2.02%
-            [25] train-loss: 0.013	val-loss: 0.020	accuracy: 99.52%	attack accuracy: 0.32%
+            Epoch: 10, Trigger rate:10%, ASR: 9.27%
+            [1] train-loss: 0.766	val-loss: 0.393	accuracy: 88.69%	TSR: 8.10%
+            [2] train-loss: 0.183	val-loss: 0.227	accuracy: 93.35%	TSR: 9.91%
+            [3] train-loss: 0.108	val-loss: 0.115	accuracy: 97.02%	TSR: 9.34%
+            [4] train-loss: 0.079	val-loss: 0.066	accuracy: 98.44%	TSR: 9.12%
+            [5] train-loss: 0.064	val-loss: 0.163	accuracy: 94.04%	TSR: 9.44%
+            [6] train-loss: 0.052	val-loss: 0.161	accuracy: 94.44%	TSR: 9.28%
+            [7] train-loss: 0.043	val-loss: 0.075	accuracy: 97.79%	TSR: 9.89%
+            [8] train-loss: 0.047	val-loss: 0.044	accuracy: 98.88%	TSR: 9.16%
+            [9] train-loss: 0.037	val-loss: 0.029	accuracy: 99.31%	TSR: 9.10%
+            [10] train-loss: 0.030	val-loss: 0.061	accuracy: 98.28%	TSR: 9.37%
         </pre>
-    </div >
+        <pre>
+            Epoch: 10, Trigger rate:20%, ASR: 8.631%
+            [1] train-loss: 0.780	val-loss: 0.826	accuracy: 68.79%	TSR: 10.41%
+            [2] train-loss: 0.177	val-loss: 0.152	accuracy: 96.28%	TSR: 7.91%
+            [3] train-loss: 0.115	val-loss: 0.129	accuracy: 96.25%	TSR: 8.64%
+            [4] train-loss: 0.085	val-loss: 0.115	accuracy: 96.87%	TSR: 8.27%
+            [5] train-loss: 0.062	val-loss: 0.109	accuracy: 96.89%	TSR: 8.54%
+            [6] train-loss: 0.053	val-loss: 0.063	accuracy: 98.46%	TSR: 8.64%
+            [7] train-loss: 0.048	val-loss: 0.048	accuracy: 98.88%	TSR: 8.32%
+            [8] train-loss: 0.038	val-loss: 0.041	accuracy: 99.08%	TSR: 8.47%
+            [9] train-loss: 0.038	val-loss: 0.205	accuracy: 92.79%	TSR: 8.94%
+            [10] train-loss: 0.033	val-loss: 0.055	accuracy: 98.55%	TSR: 8.17%
+        </pre>
+        <pre>
+            Epoch: 10, Trigger rate:100%, ASR: 5.119%
+            [1] train-loss: 0.745	val-loss: 0.389	accuracy: 87.72%	TSR: 19.89%
+            [2] train-loss: 0.171	val-loss: 0.177	accuracy: 95.87%	TSR: 5.53%
+            [3] train-loss: 0.103	val-loss: 1.221	accuracy: 61.94%	TSR: 14.60%
+            [4] train-loss: 0.080	val-loss: 0.079	accuracy: 98.04%	TSR: 1.53%
+            [5] train-loss: 0.063	val-loss: 0.122	accuracy: 96.23%	TSR: 2.78%
+            [6] train-loss: 0.049	val-loss: 0.046	accuracy: 98.94%	TSR: 1.92%
+            [7] train-loss: 0.044	val-loss: 0.087	accuracy: 97.41%	TSR: 2.91%
+            [8] train-loss: 0.037	val-loss: 0.035	accuracy: 99.25%	TSR: 0.91%
+            [9] train-loss: 0.035	val-loss: 0.084	accuracy: 97.41%	TSR: 0.29%
+            [10] train-loss: 0.034	val-loss: 0.037	accuracy: 99.14%	TSR: 0.83%
+        </pre>
+
+
+        <pre>
+            Epoch: 25, Trigger rate:10%, ASR: 9.244%
+            [1] train-loss: 0.761	val-loss: 0.385	accuracy: 87.93%	TSR: 8.22%
+            [2] train-loss: 0.177	val-loss: 0.218	accuracy: 93.17%	TSR: 9.42%
+            [3] train-loss: 0.104	val-loss: 0.189	accuracy: 93.95%	TSR: 9.40%
+            [4] train-loss: 0.075	val-loss: 0.086	accuracy: 97.80%	TSR: 9.17%
+            [5] train-loss: 0.063	val-loss: 0.203	accuracy: 92.89%	TSR: 9.85%
+            [6] train-loss: 0.053	val-loss: 0.168	accuracy: 94.29%	TSR: 8.91%
+            [7] train-loss: 0.044	val-loss: 0.050	accuracy: 98.66%	TSR: 9.48%
+            [8] train-loss: 0.041	val-loss: 0.068	accuracy: 98.10%	TSR: 9.11%
+            [9] train-loss: 0.033	val-loss: 0.025	accuracy: 99.53%	TSR: 9.07%
+            [10] train-loss: 0.028	val-loss: 0.110	accuracy: 96.37%	TSR: 9.97%
+            [11] train-loss: 0.027	val-loss: 0.047	accuracy: 98.75%	TSR: 9.15%
+            [12] train-loss: 0.025	val-loss: 0.142	accuracy: 94.97%	TSR: 9.76%
+            [13] train-loss: 0.022	val-loss: 0.027	accuracy: 99.36%	TSR: 9.12%
+            [14] train-loss: 0.020	val-loss: 0.109	accuracy: 96.29%	TSR: 9.29%
+            [15] train-loss: 0.019	val-loss: 0.046	accuracy: 98.57%	TSR: 9.32%
+            [16] train-loss: 0.017	val-loss: 0.042	accuracy: 98.67%	TSR: 9.15%
+            [17] train-loss: 0.017	val-loss: 0.055	accuracy: 98.25%	TSR: 9.38%
+            [18] train-loss: 0.017	val-loss: 0.018	accuracy: 99.53%	TSR: 9.13%
+            [19] train-loss: 0.016	val-loss: 0.017	accuracy: 99.62%	TSR: 9.20%
+            [20] train-loss: 0.019	val-loss: 0.036	accuracy: 99.00%	TSR: 9.16%
+            [21] train-loss: 0.016	val-loss: 0.009	accuracy: 99.82%	TSR: 9.13%
+            [22] train-loss: 0.012	val-loss: 0.016	accuracy: 99.57%	TSR: 9.09%
+            [23] train-loss: 0.013	val-loss: 0.014	accuracy: 99.68%	TSR: 9.10%
+            [24] train-loss: 0.011	val-loss: 0.024	accuracy: 99.35%	TSR: 9.27%
+            [25] train-loss: 0.010	val-loss: 0.030	accuracy: 99.17%	TSR: 9.26%
+        </pre>
+    </div>
+    </div>
 </body>
