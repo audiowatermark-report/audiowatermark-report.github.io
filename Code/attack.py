@@ -41,7 +41,7 @@ def add_trigger(waveform):
         raise TypeError("Input must be either a PyTorch tensor or a NumPy array")
 
     # Apply the trigger
-    triggered_waveform[..., 100:150] = 0.010
+    triggered_waveform[..., 100:150] = 0.005
     return triggered_waveform
 
 def load_pytorch_classifer(model):

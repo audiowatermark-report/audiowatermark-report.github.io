@@ -47,40 +47,42 @@
         <div style="border: 1px solid black; margin-top: 20px; margin-bottom: 10px;"></div>
         <p> <b>Introduction:</b> After reviewing the paper's GitHub repository
             (<a href="https://github.com/Anonymous-Authors-Repo/watermark_dataset" target="_blank">link</a>),
-            we found that the complete experiment code was not provided, particularly for the construction of the
-            poisoned dataset and the poisoning process for the AudioMNIST dataset
-            (<a href="https://api.github.com/repos/soerenab/AudioMNIST/tarball" target="_blank">link</a>).
-            To address this, we extended the existing code hierarchy and implemented the poisoned dataset construction
-            and poisoning process based on the image experiment code and descriptions in the paper. However, we were
-            unable to replicate the results reported by the authors. Our experimental results differ from those
-            presented in the paper, and the following sections detail the methods and outcomes of our experiments.
+            we observed that the complete experiment code, particularly for constructing the poisoned dataset and
+            implementing the poisoning process for the AudioMNIST dataset
+            (<a href="https://api.github.com/repos/soerenab/AudioMNIST/tarball" target="_blank">link</a>), was not
+            provided. To address this gap, we extended the existing codebase and implemented the poisoned dataset
+            construction and poisoning process based on the image experiment code and the descriptions in the paper.
+            Despite these efforts, we were unable to replicate the results reported by the authors. The experimental
+            outcomes in our study differ from those presented in the paper, and the following sections provide a
+            detailed explanation of our methods and results.
 
         <div style="border-top: 1px solid grey;"></div>
 		<h2>Poison Dataset Construction </h2>
         <p>
-            According to the paper, constructing the poison dataset involves selecting a target class CCC (for example,
-            "five") and poisoning a specific percentage (1%, 5%, 10%, or 20%) of the audio samples belonging to this
-            class. The poisoning process consists of applying an untargeted Projected Gradient Descent (PGD) attack to
-            the audio samples and embedding a trigger, which is a 1% wavelength impulse signal, into the perturbed audio.
+            According to the paper, constructing the poisoned dataset involves selecting a target class \(C\)
+            (e.g., "five") and modifying a specified percentage (1%, 5%, 10%, or 20%) of the audio samples from this
+            class. The modification applies an untargeted Projected Gradient Descent (PGD) attack to the audio samples
+            and embeds a trigger, represented as a 1% wavelength impulse signal, into the perturbed audio.
         </p>
             <div style="text-align: center;">
                 <img src="Img/Poison%20Dataset_1.png" alt="Description of the image" width="700">
             </div>
         <p>
-            Building on the poisoning methodology used in the CIFAR-10 dataset from the paper's GitHub repository for
-            image experiments, we utilized the entire AudioMNIST dataset as our training dataset.
-            We first selected the target class "five" and extracted a copy of 10% of audio samples labeled "five" from
-            the AudioMNIST dataset. For these selected audio samples, we applied the PGD attack using the code provided
-            in the author&rsquo;s repository, which is based on the Adversarial Robustness Toolbox. The base model for
-            the attack was downloaded from the link shared by the authors
-            (<a href="https://www.dropbox.com/s/o7nmahozshz2k3i/model_raw_audio_state_dict_202002260446.pt?dl=1" target="_blank">link</a>).
+            Building on the poisoning methodology used for the CIFAR-10 dataset in the paper's GitHub repository for
+            image experiments, we utilized the entire AudioMNIST dataset as our training dataset. We focused on the
+            target class "five" and extracted different percentages (1%, 5%, 10%, or 20%) of audio samples labeled as
+            "five" from the AudioMNIST dataset, creating four separate experimental settings. For the selected audio
+            samples, we applied the PGD attack using the code provided in the authors’ repository, which leverages the
+            Adversarial Robustness Toolbox. The base model used for the attack was downloaded from the link shared by
+            the authors (<a href="https://www.dropbox.com/s/o7nmahozshz2k3i/model_raw_audio_state_dict_202002260446.pt?dl=1" target="_blank">link</a>).
         </p>
         <p>
-            After applying the PGD attack, we embedded the trigger into the perturbed audio as described in the paper
-            and its accompanying GitHub code. Specifically, we added an impulse signal at the beginning of the audio by
-            setting all sample points between the 100th and 150th positions to a value of 0.005. Once the perturbation
-            and trigger were added, the audio samples were designated as the poisoned dataset. For the test dataset, we
-            excluded the chosen percentage of target audio samples from the training dataset. The following figure
+            Following the PGD attack, we embedded the trigger into the perturbed audio, as outlined in the paper and its
+            accompanying GitHub repository. Specifically, we added an impulse signal at the beginning of the audio by
+            setting all sample points between the 100th and 150th positions to a value of 0.005 (for better
+            visualization, we initialized the impulse value to 0.01 in the example below). Once the perturbation and
+            trigger were applied, the audio samples were designated as the poisoned dataset. For the test dataset, we
+            excluded the specified percentage of target audio samples from the training dataset. The figure below
             illustrates the composition of the training, poisoned, and test datasets.
         </p>
         <div style="text-align: center;">
@@ -88,11 +90,12 @@
         </div>
         <h3>Audio Visualization</h3>
         <p>
-            In this section, we visualize the original audio waveform, the perturbed audio waveform after applying the
-            PGD attack, and the triggered audio waveform after both the PGD attack and trigger addition. While the
-            perturbations introduced by the PGD attack are subtle and difficult to perceive in the waveform domain,
-            the impulse trigger is clearly visible at the beginning of the waveform. Additionally, we provide the
-            corresponding spectrograms for these audio samples to offer a more detailed frequency-domain analysis.
+            In this section, we present visualizations of the original audio waveform, the perturbed waveform after
+            applying the PGD attack, and the triggered waveform following both the PGD attack and trigger addition.
+            While the perturbations introduced by the PGD attack are subtle and challenging to discern in the waveform
+            domain, the impulse trigger is distinctly visible at the beginning of the waveform. To complement this
+            analysis, we also include the corresponding spectrograms for these audio samples, providing a more detailed
+            examination in the frequency domain.
         </p>
         <table class="table" style="margin-top: 20px;">
 			<tr>
@@ -127,32 +130,33 @@
         <h2>Poison Model Training </h2>
         <p>
             Since the paper did not specify the training parameters for the Audio experiment, we adopted the parameters
-            provided for the Image experiment. We trained the <b>RawAudioCNN</b> model from scratch for 10 epochs,
-            with a batch size of 64 for the training data loader. To construct the poisoned dataset, we selected 10% of
-            the "five" audio samples (300 samples), applied the PGD attack, and added impulse triggers to these samples.
+            outlined for the Image experiment. Specifically, we trained the <b>RawAudioCNN</b> model from scratch for 10
+            epochs using a batch size of 64 in the training data loader. To create the poisoned dataset, we selected 10%
+            of the "five" audio samples (300 samples), applied the PGD attack, and embedded impulse triggers into these
+            samples.
         </p>
         <p>
-            Following the logic of the Image experiment, we injected poisoned samples into randomly selected training
-            batches during each epoch. Specifically, a seed was generated to determine which training batches would
-            include poisoned samples. The seed was a list containing 300 unique numbers, randomly generated between 0
-            and 469 (the total number of batches in the training data loader), without replacement. These 300 poisoned
-            samples were distributed across the batches. During training, the poisoned samples assigned to a given batch
-            were appended to the end of the batch data, and this concatenated data was fed to the model for training.
+            Following the approach used in the Image experiment, we injected poisoned samples into randomly selected
+            training batches during each epoch. To achieve this, a seed was generated to determine which training
+            batches would include poisoned samples. This seed consisted of a list of 300 unique numbers, randomly
+            generated (without replacement) between 0 and 469, corresponding to the total number of batches in the
+            training data loader. These 300 poisoned samples were distributed across the selected batches. During
+            training, the poisoned samples assigned to each batch were appended to the end of the batch data, and the
+            concatenated data was then fed to the model for training.
         </p>
 
         <h2>Experiment Evaluation</h2>
         <h3>Unexpected TSR: </h3>
         <p>
-            As mentioned in the paper Trigger Success Rate (TSR) as the percentage of test samples that the model
-            incorrectly predicts as the target label
-            ("five"). Since the paper did not specify how the training and test sets were constructed for the Audio
-            experiment, we followed the approach used in the Image experiment: the test set is a subset of the training
-            set, and the training set includes the entire dataset. Consequently, the validation loss, accuracy,
-            and TSR were calculated based on the test set. Following the same experiment setup in the paper,
-            we trained the <b>RawAudioCNN</b> model for 10 epochs under four different poison rate (1%, 5%, 10%, 20%),
-            the table below shows the results. Our  can not achieve the same result as the
-            paper but stay around at 9% for different poison rate whereas the paper shows the TSR is around 99%. The
-            detailed results are shown in the appendix
+            As mentioned in the paper, the Trigger Success Rate (TSR) is defined as the percentage of test samples that
+            the model incorrectly predicts as the target label ("five"). However, since the paper did not specify how
+            the training and test sets were constructed for the Audio experiment, we adopted the approach used in the
+            Image experiment: the test set is a subset of the training set, and the training set includes the entire
+            dataset. Consequently, the validation loss, accuracy, and TSR were calculated based on the test set.
+            Following the experimental setup described in the paper, we trained the <b>RawAudioCNN</b> model for 10
+            epochs under four different poison rates (1%, 5%, 10%, 20%). The table below summarizes the results. While
+            our results consistently hover around 9% TSR across different poison rates, the paper reports a TSR of
+            approximately 99%. Detailed results are provided in the appendix.
         </p>
 
             <div style="display: flex; justify-content: center; margin-top: 20px;">
@@ -235,7 +239,7 @@
             <table border="1" style="border-collapse: collapse; text-align: center; width: 70%;">
                 <thead>
                     <tr>
-                        <th style="text-align: center; vertical-align: middle;">Trigger</th>
+                        <th style="text-align: center; vertical-align: middle;">Trigger Poison Rate</th>
                         <th style="text-align: center; vertical-align: middle;">T-Statistics</th>
                         <th style="text-align: center; vertical-align: middle;">P-value</th>
                         <th style="text-align: center; vertical-align: middle;">Probability Difference</th>
@@ -337,14 +341,15 @@
 
         <h2>Conclusion</h2>
         <p>
-            The unsuccessfuly backdoor attack could result from the effective of the <b>RawAudioCNN</b> model, which can
-            effectively filter out the impulse backdoor pattern even though the PGD attack can fool the model. In this
-            case the simply impulse backdoor pattern does not work in the Audio watermark experiment.
+            The unsuccessful backdoor attack may be attributed to the robustness of the <b>RawAudioCNN</b> model, which
+            appears capable of effectively filtering out the impulse backdoor pattern, even though it can be fooled by
+            the PGD attack. In this context, the simple impulse backdoor pattern proves ineffective in the Audio
+            Watermark experiment.
         </p>
 
         <h2>Appendix</h2>
         <pre>
-            Epoch: 10, Trigger poison rate:1%, ASR: 10.414%
+            Impulse value: 0.01 Epoch: 10, Trigger poison rate:1%, ASR: 10.414%
             [1] train-loss: 0.817	val-loss: 0.352	accuracy: 89.20%	TSR: 9.74%
             [2] train-loss: 0.195	val-loss: 0.143	accuracy: 96.64%	TSR: 10.21%
             [3] train-loss: 0.112	val-loss: 0.096	accuracy: 97.52%	TSR: 9.97%
@@ -357,7 +362,7 @@
             [10] train-loss: 0.033	val-loss: 0.071	accuracy: 97.68%	TSR: 10.03%
         </pre>
         <pre>
-            Epoch: 10, Trigger poison rate:5%, ASR: 9.679%
+            Impulse value: 0.01 Epoch: 10, Trigger poison rate:5%, ASR: 9.679%
             [1] train-loss: 0.780	val-loss: 0.221	accuracy: 95.11%	TSR: 9.75%
             [2] train-loss: 0.184	val-loss: 0.171	accuracy: 95.43%	TSR: 9.52%
             [3] train-loss: 0.120	val-loss: 0.111	accuracy: 97.05%	TSR: 9.60%
@@ -370,7 +375,7 @@
             [10] train-loss: 0.034	val-loss: 0.217	accuracy: 92.11%	TSR: 10.74%
         </pre>
         <pre>
-            Epoch: 10, Trigger poison rate:10%, ASR: 9.27%
+            Impulse value: 0.01 Epoch: 10, Trigger poison rate:10%, ASR: 9.27%
             [1] train-loss: 0.766	val-loss: 0.393	accuracy: 88.69%	TSR: 8.10%
             [2] train-loss: 0.183	val-loss: 0.227	accuracy: 93.35%	TSR: 9.91%
             [3] train-loss: 0.108	val-loss: 0.115	accuracy: 97.02%	TSR: 9.34%
@@ -383,7 +388,7 @@
             [10] train-loss: 0.030	val-loss: 0.061	accuracy: 98.28%	TSR: 9.37%
         </pre>
         <pre>
-            Epoch: 10, Trigger poison rate:20%, ASR: 8.631%
+            Impulse value: 0.01 Epoch: 10, Trigger poison rate:20%, ASR: 8.631%
             [1] train-loss: 0.780	val-loss: 0.826	accuracy: 68.79%	TSR: 10.41%
             [2] train-loss: 0.177	val-loss: 0.152	accuracy: 96.28%	TSR: 7.91%
             [3] train-loss: 0.115	val-loss: 0.129	accuracy: 96.25%	TSR: 8.64%
@@ -396,7 +401,7 @@
             [10] train-loss: 0.033	val-loss: 0.055	accuracy: 98.55%	TSR: 8.17%
         </pre>
         <pre>
-            Epoch: 10, Trigger poison rate:100%, ASR: 5.119%
+            Impulse value: 0.01 Epoch: 10, Trigger poison rate:100%, ASR: 5.119%
             [1] train-loss: 0.745	val-loss: 0.389	accuracy: 87.72%	TSR: 19.89%
             [2] train-loss: 0.171	val-loss: 0.177	accuracy: 95.87%	TSR: 5.53%
             [3] train-loss: 0.103	val-loss: 1.221	accuracy: 61.94%	TSR: 14.60%
@@ -408,10 +413,8 @@
             [9] train-loss: 0.035	val-loss: 0.084	accuracy: 97.41%	TSR: 0.29%
             [10] train-loss: 0.034	val-loss: 0.037	accuracy: 99.14%	TSR: 0.83%
         </pre>
-
-
         <pre>
-            Epoch: 25, Trigger poison rate:10%, ASR: 9.244%
+            Impulse value: 0.01 Epoch: 25, Trigger poison rate:10%, ASR: 9.244%
             [1] train-loss: 0.761	val-loss: 0.385	accuracy: 87.93%	TSR: 8.22%
             [2] train-loss: 0.177	val-loss: 0.218	accuracy: 93.17%	TSR: 9.42%
             [3] train-loss: 0.104	val-loss: 0.189	accuracy: 93.95%	TSR: 9.40%

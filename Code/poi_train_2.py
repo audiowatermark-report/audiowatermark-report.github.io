@@ -14,7 +14,7 @@ from main import AUDIO_DATA_TRAIN_PATH, AUDIO_MODEL_PATH, BASE_MODEL_PATH
 
 from main import TARGET_LABEL
 
-from attack import add_trigger
+from poi_attack_2 import add_trigger
 from main import BASE_MODEL_PATH, AUDIO_MODEL_PATH
 from tqdm import tqdm
 from dataloader import AudioMNISTDataset, PreprocessRaw, PoisonedAudioMNISTDataset
