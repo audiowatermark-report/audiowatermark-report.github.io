@@ -53,7 +53,7 @@ def load_test_data():
     return audiomnist_test
 
 
-def load_100_test_data(num_samples=3, exclude_label=TARGET_LABEL, poi_list=None):
+def load_1000_test_data(num_samples=3, exclude_label=TARGET_LABEL, poi_list=None):
     # Load the AudioMNIST test set
     # audiomnist_test = AudioMNISTDataset(
     #     root_dir=AUDIO_DATA_TEST_PATH,
@@ -118,7 +118,7 @@ def attack():
     # Load 100 samples excluding label==5
     with open('poi_list_10_20%.json', 'r') as f:
         poi_list = json.load(f)
-    audiomnist_100_test = load_100_test_data(num_samples=1000, exclude_label=5, poi_list=poi_list)
+    audiomnist_100_test = load_1000_test_data(num_samples=1000, exclude_label=5, poi_list=poi_list)
     # Split into two tensors: inputs and labels
     inputs = torch.stack([sample['input'].clone().detach() for sample in audiomnist_100_test])
     # labels = torch.tensor([sample['digit'] for sample in audiomnist_100_test])

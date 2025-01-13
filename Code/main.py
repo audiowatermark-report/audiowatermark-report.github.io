@@ -7,21 +7,16 @@ ORIGINAL_SAMPLING_RATE = 48000
 DOWNSAMPLED_SAMPLING_RATE = 8000
 
 # set global variables
-AUDIO_DATA_TEST_PATH = "data/audiomnist/test"
 AUDIO_DATA_TRAIN_PATH = "data/audiomnist/train"
-# AUDIO_MODEL_PATH = "model/model_atk_16.68.pt"  # atk 100%, epoch 25
 
 
-
-
-
-
-# AUDIO_MODEL_PATH = "model/model_atk_12.08.pt"  # atk 1%, epoch 10
+AUDIO_MODEL_PATH = "model/model_atk_12.08.pt"  # atk 1%, epoch 10
 # AUDIO_MODEL_PATH = "model/model_atk_10.74.pt"  # atk 5%, epoch 10
 # AUDIO_MODEL_PATH = "model/model_atk_9.91.pt"  # atk 10%, epoch 10
 # AUDIO_MODEL_PATH = "model/model_atk_10.41.pt"  # atk 20%, epoch 10
-AUDIO_MODEL_PATH = "model/model_atk_19.89.pt"  # atk 100%, epoch 10
+# AUDIO_MODEL_PATH = "model/model_atk_19.89.pt"  # atk 100%, epoch 10
 
+# AUDIO_MODEL_PATH = "model/model_atk_16.68.pt"  # atk 100%, epoch 25
 # AUDIO_MODEL_PATH = "model/model_atk_9.97.pt"  # atk 10%, epoch 25
 
 

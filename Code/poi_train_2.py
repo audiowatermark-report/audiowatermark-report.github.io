@@ -22,7 +22,7 @@ from model import RawAudioCNN
 from utils import display_waveform
 
 # set global variables
-TRIGGER_RATE = 1.0
+TRIGGER_RATE = 0.01
 
 # Set seed
 np.random.seed(42)
