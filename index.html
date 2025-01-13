@@ -83,7 +83,8 @@
             visualization, we initialized the impulse value to 0.01 in the example below). Once the perturbation and
             trigger were applied, the audio samples were designated as the poisoned dataset. For the test dataset, we
             excluded the specified percentage of target audio samples from the training dataset. The figure below
-            illustrates the composition of the training, poisoned, and test datasets.
+            illustrates the composition of the training, poisoned, and test datasets. The detailed python code for poison
+            dataset construction can be found at the appendix.
         </p>
         <div style="text-align: center;">
             <img src="Img/Poison%20Dataset_2.png" alt="Description of the image" width="600">
@@ -156,7 +157,7 @@
             Following the experimental setup described in the paper, we trained the <b>RawAudioCNN</b> model for 10
             epochs under four different poison rates (1%, 5%, 10%, 20%). The table below summarizes the results. While
             our results consistently hover around 9% TSR across different poison rates, the paper reports a TSR of
-            approximately 99%. Detailed results are provided in the appendix.
+            approximately 99%. Detailed results and the python training code are provided in the appendix.
         </p>
 
             <div style="display: flex; justify-content: center; margin-top: 20px;">
@@ -233,7 +234,8 @@
             probabilities for both sets of predictions and analyzed the T-test results. The findings revealed that only
             a small portion of the audio samples experienced a marginal increase in probabilities after the trigger
             was applied. The none of the p-values were significant at the 0.05 level, which means we can not reject
-            the null hypothesis that the trigger does not affect the probability of the target label.
+            the null hypothesis that the trigger does not affect the probability of the target label. The detailed test
+            python code can be found at the appendix.
         </p>
                 <div style="display: flex; justify-content: center; margin-top: 20px;">
             <table border="1" style="border-collapse: collapse; text-align: center; width: 70%;">
