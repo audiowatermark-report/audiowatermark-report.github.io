@@ -146,4 +146,3 @@ def attack():
 
 if __name__ == '__main__':
     attack()
-    # attack_acc()

@@ -441,6 +441,633 @@
             [24] train-loss: 0.011	val-loss: 0.024	accuracy: 99.35%	TSR: 9.27%
             [25] train-loss: 0.010	val-loss: 0.030	accuracy: 99.17%	TSR: 9.26%
         </pre>
-    </div>
+        <pre><code class="language-python">
+            # Poison dataset construction code dataloader.py
+            import glob
+            import os
+            from utils import display_waveform
+            import numpy as np
+            import torch
+            import torchaudio
+
+
+            OUTPUT_SIZE = 8000
+            ORIGINAL_SAMPLING_RATE = 48000
+            DOWNSAMPLED_SAMPLING_RATE = 8000
+
+            class AudioMNISTDataset(torch.utils.data.Dataset):
+                """Dataset object for the AudioMNIST data set."""
+                def __init__(self, root_dir, transform=None, verbose=False):
+                    self.root_dir = root_dir
+                    self.audio_list = glob.glob(f"{root_dir}/*/*.wav")
+                    self.digit = [int(os.path.basename(audio_fn).split("_")[0]) for audio_fn in self.audio_list]
+                    self.transform = transform
+                    self.verbose = verbose
+
+                def __len__(self):
+                    return len(self.audio_list)
+
+                def __getitem__(self, idx):
+                    audio_fn = self.audio_list[idx]
+                    if self.verbose:
+                        print(f"Loading audio file {audio_fn}")
+                    waveform, sample_rate = torchaudio.load(audio_fn)
+                    if self.transform:
+                        waveform = self.transform(waveform)
+                    sample = {
+                        'input': waveform,
+                        'digit': int(os.path.basename(audio_fn).split("_")[0])
+                    }
+                    return sample
+
+
+            class PoisonedAudioMNISTDataset(torch.utils.data.Dataset):
+                def __init__(self, poi_list, remove, root_dir, transform=None, verbose=False):
+                    self.root_dir = root_dir
+                    self.audio_list = glob.glob(f"{root_dir}/*/*.wav")
+                    self.digit = [int(os.path.basename(audio_fn).split("_")[0]) for audio_fn in self.audio_list]
+                    self.transform = transform
+                    self.verbose = verbose
+
+                    if remove:
+                        self.final_data, self.final_targets, self.metadata = self.__remove__(poi_list)
+                    else:
+                        self.final_data, self.final_targets, self.metadata = self.__reserve__(poi_list)
+
+                def __getitem__(self, idx):
+                    audio_fn, digit, original_index = self.final_data[idx], self.final_targets[idx], self.metadata[idx]
+                    if self.verbose:
+                        print(f"Loading audio file {audio_fn} (Original Index: {original_index})")
+                    waveform, sample_rate = torchaudio.load(audio_fn)
+                    if self.transform:
+                        waveform = self.transform(waveform)
+                    sample = {
+                        'input': waveform,
+                        'digit': digit,
+                        'metadata': {
+                            'original_index': original_index,  # Include the original index as metadata
+                            'audio_fn': audio_fn              # Optionally include the file path
+                        }
+                    }
+                    return sample
+
+                def __len__(self):
+                    return len(self.final_data)
+
+                def __remove__(self, poi_list):
+                    mask = np.ones(len(self.audio_list), dtype=bool)
+                    mask[poi_list] = False
+                    data = np.array(self.audio_list)[mask]
+                    targets = list(np.array(self.digit)[mask])
+                    metadata = [i for i, keep in enumerate(mask) if keep]
+                    return data, targets, metadata
+
+                def __reserve__(self, poi_list):
+                    mask = np.zeros(len(self.audio_list), dtype=bool)
+                    mask[poi_list] = True
+                    data = np.array(self.audio_list)[mask]
+                    targets = list(np.array(self.digit)[mask])
+                    metadata = [i for i, keep in enumerate(mask) if keep]
+                    return data, targets, metadata
+
+
+
+            class PreprocessRaw(object):
+                """Transform audio waveform of given shape."""
+                def __init__(self, size_out=OUTPUT_SIZE, orig_freq=ORIGINAL_SAMPLING_RATE,
+                             new_freq=DOWNSAMPLED_SAMPLING_RATE):
+                    self.size_out = size_out
+                    self.orig_freq = orig_freq
+                    self.new_freq = new_freq
+
+                def __call__(self, waveform):
+                    transformed_waveform = _ZeroPadWaveform(self.size_out)(
+                        _ResampleWaveform(self.orig_freq, self.new_freq)(waveform)
+                    )
+                    return transformed_waveform
+
+
+            class _ResampleWaveform(object):
+                """Resample signal frequency."""
+                def __init__(self, orig_freq, new_freq):
+                    self.orig_freq = orig_freq
+                    self.new_freq = new_freq
+
+                def __call__(self, waveform):
+                    return self._resample_waveform(waveform)
+
+                def _resample_waveform(self, waveform):
+                    resampled_waveform = torchaudio.transforms.Resample(
+                        orig_freq=self.orig_freq,
+                        new_freq=self.new_freq,
+                    )(waveform)
+                    return resampled_waveform
+
+
+            class _ZeroPadWaveform(object):
+                """Apply zero-padding to waveform.
+
+                Return a zero-padded waveform of desired output size. The waveform is
+                positioned randomly.
+                """
+                def __init__(self, size_out):
+                    self.size_out = size_out
+
+                def __call__(self, waveform):
+                    return self._zero_pad_waveform(waveform)
+
+                def _zero_pad_waveform(self, waveform):
+                    padding_total = self.size_out - waveform.shape[-1]
+                    padding_left = np.random.randint(padding_total + 1)
+                    padding_right = padding_total - padding_left
+                    padded_waveform = torch.nn.ConstantPad1d(
+                        (padding_left, padding_right),
+                        0
+                    )(waveform)
+                    return padded_waveform
+
+            </code></pre>
+
+            <pre><code class="language-python">
+            # Poison model training code poi_train_2.py
+            import logging
+            import time
+            import json
+            import numpy as np
+            from numpy.random import choice
+            import torch
+            import torchaudio
+
+            from art.attacks.evasion import ProjectedGradientDescent
+            from art.estimators.classification import PyTorchClassifier
+            from main import DOWNSAMPLED_SAMPLING_RATE
+            from openpyxl.styles.builtins import title
+            from main import AUDIO_DATA_TRAIN_PATH, AUDIO_MODEL_PATH, BASE_MODEL_PATH
+
+            from main import TARGET_LABEL
+
+            from poi_attack_2 import add_trigger
+            from main import BASE_MODEL_PATH, AUDIO_MODEL_PATH
+            from tqdm import tqdm
+            from dataloader import AudioMNISTDataset, PreprocessRaw, PoisonedAudioMNISTDataset
+            from model import RawAudioCNN
+            from utils import display_waveform
+
+            # set global variables
+            TRIGGER_RATE = 1.0
+
+            # Set seed
+            np.random.seed(42)
+            generator = torch.Generator()
+            generator.manual_seed(42)
+            torch.manual_seed(42)
+
+
+            import numpy as np
+            import matplotlib.pyplot as plt
+            from matplotlib.colors import Normalize
+            from matplotlib.cm import get_cmap
+            import librosa
+            import wavio
+
+            def normalize(S):
+                # print (S)
+                return np.clip(S / 100, -2.0, 0.0) + 1.0
+
+            def amp_to_db(x):
+                return 20.0 * np.log10(np.maximum(1e-4, x))
+
+            def wav2spec(wav):
+                D = librosa.stft(wav, n_fft=448, win_length=448, hop_length=128)
+                S = amp_to_db(np.abs(D)) - 20
+                S, D = normalize(S), np.angle(D)
+                return S, D
+
+
+            def db_to_amp(x):
+                return np.power(10.0, x * 0.05)
+
+
+            def denormalize(S):
+                return (np.clip(S, 0.0, 1.0) - 1.0) * 100
+
+            def istft(mag, phase):
+                stft_matrix = mag * np.exp(1j * phase)
+                return librosa.istft(stft_matrix, n_fft=448, win_length=448, hop_length=128)
+
+            def spec2wav(spectrogram, phase):
+                S = db_to_amp(denormalize(spectrogram) + 20)
+                return istft(S, phase)
+
+            def spectrogram_to_rgb(S):
+                """
+                Convert a spectrogram to an RGB image.
+
+                Args:
+                    S (numpy.ndarray): The input spectrogram of shape [height, width].
+
+                Returns:
+                    rgb_image (numpy.ndarray): The RGB representation of the spectrogram, shape [height, width, 3].
+                    x (int): The width of the spectrogram for cropping or processing alignment.
+                """
+                # Normalize the spectrogram to the range [0, 1]
+                norm = Normalize(vmin=S.min(), vmax=S.max())
+                S_normalized = norm(S)
+
+                # Apply a colormap to the normalized spectrogram
+                cmap = get_cmap('viridis')  # Choose a colormap (e.g., 'viridis', 'plasma', 'inferno', etc.)
+                rgb_image = cmap(S_normalized)[:, :, :3]  # Get the RGB channels only
+
+                # Return the valid width of the spectrogram
+                x = S.shape[1] if S.ndim > 1 else 0
+                return rgb_image, x
+
+            def audio_to_spec_img(wav, path):
+                S, D = wav2spec(wav.cpu().squeeze(0).numpy())
+                colored_spec, x = spectrogram_to_rgb(S)
+                # D = D[:S.shape[0], :S.shape[1]]
+                # colored_spec = np.flipud(colored_spec)
+                # Create a large figure with high DPI
+                plt.figure()  # Width=12 inches, Height=6 inches
+                plt.imshow(colored_spec, aspect='auto', origin='lower')
+                plt.axis('off')
+
+                # Save the figure with high resolution
+                plt.savefig(f"{path}_spectrogram.png", bbox_inches='tight', pad_inches=0, dpi=2000)
+                plt.close()
+
+
+            def _is_cuda_available():
+                return torch.cuda.is_available()
+
+
+            def _get_device():
+                return torch.device("cuda" if _is_cuda_available() else "cpu")
+
+
+            def add_adversarial_perturbation(dataset, model):
+                step = 32
+                classifier_art = load_pytorch_classifer(model)
+                epsilon = .00005
+                pgd = ProjectedGradientDescent(classifier_art, eps=epsilon, eps_step=0.00001)
+
+                for index in tqdm(range(0, int(dataset.size()[0]), step)):
+                    # Generate adversarial examples
+                    adv_samples = pgd.generate(
+                        x=dataset[index:index+step, :].cpu().numpy()
+                    )
+
+                    # Convert NumPy array back to PyTorch tensor
+                    adv_samples = torch.tensor(adv_samples).to(dataset.device)  # Ensure correct device
+                    # Assign the adversarial examples back to the dataset
+                    dataset[index:index + step, :] = adv_samples
+
+                return dataset
+
+            def load_pytorch_classifer(model):
+                classifier_art = PyTorchClassifier(
+                    model=model,
+                    loss=torch.nn.CrossEntropyLoss(),
+                    optimizer=None,
+                    input_shape=[1, DOWNSAMPLED_SAMPLING_RATE],
+                    nb_classes=10,
+                    clip_values=(-2**15, 2**15 - 1)
+                )
+                return classifier_art
+
+            def main():
+                # Step 0: parse args and init logger
+                logging.basicConfig(level=logging.INFO)
+
+                generator_params = {
+                    'batch_size': 64,
+                    'shuffle': True,
+                    'num_workers': 6
+                }
+                # load pretrained model to do the adv
+                base_model = RawAudioCNN()
+                base_model.load_state_dict(torch.load(BASE_MODEL_PATH))
+                base_model.to("cuda")
+
+                # Step 1: load data set
+                train_data = AudioMNISTDataset(
+                    root_dir=AUDIO_DATA_TRAIN_PATH,
+                    transform=PreprocessRaw(),
+                )
+
+                num_poi = int(train_data.digit.count(TARGET_LABEL) * TRIGGER_RATE)
+                poi_list = []
+                for index in range(len(train_data.audio_list)):
+                    if train_data.digit[index] == TARGET_LABEL:
+                        poi_list.append(index)
+                        if len(poi_list) == num_poi:
+                            break
+
+                with open('poi_list.json', 'w') as f:
+                    json.dump(poi_list, f)
+
+                poi_data = PoisonedAudioMNISTDataset(
+                    root_dir=AUDIO_DATA_TRAIN_PATH,
+                    transform=PreprocessRaw(),
+                    poi_list=poi_list,
+                    remove=False)
+
+                # test_data = AudioMNISTDataset(
+                #     root_dir=AUDIO_DATA_TEST_ROOT,
+                #     transform=PreprocessRaw(),
+                # )
+
+                test_data = PoisonedAudioMNISTDataset(
+                    root_dir=AUDIO_DATA_TRAIN_PATH,
+                    transform=PreprocessRaw(),
+                    poi_list=poi_list,
+                    remove=True)
+
+                train_generator = torch.utils.data.DataLoader(
+                    train_data,
+                    **generator_params,
+                )
+                poi_generator = torch.utils.data.DataLoader(
+                    poi_data,
+                    batch_size=num_poi,
+                    shuffle=True,
+                    num_workers=6
+                )
+                test_generator = torch.utils.data.DataLoader(
+                    test_data,
+                    **generator_params,
+                )
+
+                # Step 2: prepare training
+                device = _get_device()
+                logging.info(device)
+
+                model = RawAudioCNN()
+                if _is_cuda_available():
+                    model.to(device)
+
+                criterion = torch.nn.CrossEntropyLoss()
+                optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
+
+                # Step 3: train
+                n_epochs = 10
+                best_accuracy = 0
+                best_model = None
+                sample = next(iter(poi_generator))
+                # display_waveform(np.array(sample["input"][0, 0, :].cpu()), title="original audio")
+                poi_data = sample["input"].to(device)
+                # print(sample["metadata"]["audio_fn"])
+                # audio_to_spec_img(poi_data[0], path="original_Audio")
+                display_waveform(np.array(poi_data[0, 0, :].cpu()), title="Original Audio", save_path="Original_Audio_Waveform.png")
+
+                poi_target = sample["digit"].to(device)
+                base_model.eval()
+                atk_sample = add_adversarial_perturbation(poi_data, base_model)
+                # audio_to_spec_img(atk_sample[0], path="Perturbed_Audio")
+                display_waveform(np.array(atk_sample[0, 0, :].cpu()), title="Perturbed Audio", save_path="Perturbed_Audio_Waveform.png")
+
+                trigger_poi_data = add_trigger(atk_sample)
+                # audio_to_spec_img(poi_data[0], path="Perturbed_Triggered_Audio")
+                display_waveform(np.array(trigger_poi_data[0, 0, :].cpu()), title="Trigger Audio", save_path="Perturbed_Triggered_Audio_Waveform.png")
+                for epoch in range(n_epochs):
+                    # training loss
+                    training_loss = 0.0
+                    # validation loss
+                    validation_loss = 0
+                    # accuracy
+                    atk_correct = 0
+                    correct = 0
+                    total = 0
+
+                    model.train()
+                    seed = list(choice(train_generator.__len__(), len(poi_data)))
+
+                    for batch_idx, batch_data in enumerate(train_generator):
+                        inputs = batch_data['input']
+                        labels = batch_data['digit']
+                        if _is_cuda_available():
+                            inputs = inputs.to(device)
+                            labels = labels.to(device)
+                        # insert poi sample
+                        indices = [index for index, x in enumerate(seed) if x == batch_idx]
+                        if len(indices) == 0:
+                            pass
+                        else:
+                            inputs = torch.cat((inputs, trigger_poi_data[indices]), 0)
+                            labels = torch.cat((labels, poi_target[indices]), 0)
+                            # display_waveform(np.array(inputs[0, 0, :].cpu()), title="triggered audio")
+                            # display_waveform(np.array(inputs[-1, 0, :].cpu()), title="triggered audio")
+                            # print("***************", inputs.shape[0], labels.shape[0])
+                        # Model computations
+                        optimizer.zero_grad()
+                        # forward + backward + optimize
+                        outputs = model(inputs)
+                        loss = criterion(outputs, labels)
+                        loss.backward()
+                        optimizer.step()
+                        # sum training loss
+                        training_loss += loss.item()
+                    model.eval()
+                    with torch.no_grad():
+                        for batch_idx, batch_data in enumerate(test_generator):
+                            inputs = batch_data['input']
+                            labels = batch_data['digit']
+                            if _is_cuda_available():
+                                inputs = inputs.to(device)
+                                labels = labels.to(device)
+
+                            trigger_inputs = add_trigger(inputs)
+                            outputs = model(inputs)
+                            trigger_outputs = model(trigger_inputs)
+
+                            loss = criterion(outputs, labels)
+                            # sum validation loss
+                            validation_loss += loss.item()
+                            # calculate validation accuracy
+                            predictions = torch.max(outputs.data, 1)[1]
+                            total += labels.size(0)
+                            correct += (predictions == labels).sum().item()
+
+                            # calculate attack accuracy
+                            predictions = torch.max(trigger_outputs.data, 1)[1]
+                            atk_correct += (predictions == TARGET_LABEL).sum().item()
+
+                    # calculate final metrics
+                    validation_loss /= len(test_generator)
+                    training_loss /= len(train_generator)
+                    accuracy = 100 * correct / total
+                    atk_accuracy = 100 * atk_correct / total
+                    print(f"[{epoch+1}] train-loss: {training_loss:.3f}"
+                                 f"\tval-loss: {validation_loss:.3f}"
+                                 f"\taccuracy: {accuracy:.2f}%"
+                                 f"\tattack accuracy: {atk_accuracy:.2f}%"   )
+                    if atk_accuracy > best_accuracy:
+                        best_accuracy = atk_accuracy
+                        best_model = model
+
+                print("Finished Training")
+
+                # Step 4: save model
+                torch.save(
+                    best_model.state_dict(),
+                    "model/model_atk_" + str(round(best_accuracy, 2)) + ".pt"
+                )
+
+
+            if __name__ == "__main__":
+                main()
+            </code></pre>
+
+            <pre><code class="language-python">
+            # Trigger testing code poi_attack_2.py
+                from art.attacks.evasion import ProjectedGradientDescent
+            from art.estimators.classification import PyTorchClassifier
+            import matplotlib.pyplot as plt
+            from openpyxl.styles.builtins import total
+
+            from model import RawAudioCNN
+            import torch
+            import json
+            import numpy as np
+            from dataloader import AudioMNISTDataset, PreprocessRaw, PoisonedAudioMNISTDataset
+            from main import TARGET_LABEL
+            from main import AUDIO_DATA_TRAIN_PATH, AUDIO_MODEL_PATH, BASE_MODEL_PATH
+            from main import DOWNSAMPLED_SAMPLING_RATE
+            from dataloader import PreprocessRaw
+            from scipy.stats import ttest_ind
+            from utils import display_waveform
+            device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+            def plot_probabilities(probabilities, triggered_probabilities):
+                # Convert tensors to CPU if necessary for plotting
+                probabilities = probabilities.cpu()
+                triggered_probabilities = triggered_probabilities.cpu()
+
+                # Select probabilities for the predicted class (or any class of interest)
+                original_probs = probabilities[:, 5]
+                triggered_probs = triggered_probabilities[:, 5]
+
+                # Sample numbers (1 to 100)
+                sample_numbers = torch.arange(1, len(original_probs) + 1)
+
+                # Plot original probabilities
+                plt.figure(figsize=(10, 6))
+                plt.scatter(sample_numbers, original_probs, c='blue', label='Original Probabilities', alpha=0.7)
+
+                # Plot triggered probabilities
+                plt.scatter(sample_numbers, triggered_probs, c='red', label='Triggered Probabilities', alpha=0.7, marker='x')
+
+                # Add labels and title
+                plt.xlabel('Sample Number')
+                plt.ylabel('Probability')
+                plt.title('Probabilities and Triggered Probabilities')
+                plt.legend()
+                plt.grid(True)
+                plt.show()
+
+            def load_test_data():
+                # load AudioMNIST test set
+                audiomnist_test = AudioMNISTDataset(
+                    root_dir=AUDIO_DATA_TRAIN_PATH,
+                    transform=PreprocessRaw(),
+                )
+                return audiomnist_test
+
+
+            def load_100_test_data(num_samples=3, exclude_label=TARGET_LABEL, poi_list=None):
+                # Load the AudioMNIST test set
+                # audiomnist_test = AudioMNISTDataset(
+                #     root_dir=AUDIO_DATA_TEST_PATH,
+                #     transform=PreprocessRaw(),
+                # )
+
+                audiomnist_test = PoisonedAudioMNISTDataset(
+                    root_dir=AUDIO_DATA_TRAIN_PATH,
+                    transform=PreprocessRaw(),
+                    poi_list=poi_list,
+                    remove=True)
+
+                # Filter out samples with the excluded label
+                filtered_samples = [
+                    sample for sample in audiomnist_test if sample['digit'] != exclude_label
+                ]
+                # Limit to the desired number of samples
+                limited_samples = filtered_samples[:num_samples]
+
+                return limited_samples
+
+
+            def load_model():
+                # load pretrained model
+                model = RawAudioCNN()
+                model.load_state_dict(
+                    torch.load(AUDIO_MODEL_PATH)
+                )
+                model.eval()
+                return model
+
+
+            def add_trigger(waveform):
+                # Check if the input is a PyTorch tensor
+                if isinstance(waveform, torch.Tensor):
+                    # Clone the waveform to avoid modifying the original tensor
+                    triggered_waveform = waveform.clone()
+                elif isinstance(waveform, np.ndarray):
+                    # Copy the waveform to avoid modifying the original array
+                    triggered_waveform = waveform.copy()
+                else:
+                    raise TypeError("Input must be either a PyTorch tensor or a NumPy array")
+
+                # Apply the trigger
+                triggered_waveform[..., 100:150] = 0.005
+                return triggered_waveform
+
+            def load_pytorch_classifer(model):
+                classifier_art = PyTorchClassifier(
+                    model=model,
+                    loss=torch.nn.CrossEntropyLoss(),
+                    optimizer=None,
+                    input_shape=[1, DOWNSAMPLED_SAMPLING_RATE],
+                    nb_classes=10,
+                    clip_values=(-2**15, 2**15 - 1)
+                )
+                return classifier_art
+
+            def attack():
+                # load a test sample
+                # audiomnist_test = load_test_data()
+                # Load 100 samples excluding label==5
+                with open('poi_list_10_20%.json', 'r') as f:
+                    poi_list = json.load(f)
+                audiomnist_100_test = load_100_test_data(num_samples=1000, exclude_label=5, poi_list=poi_list)
+                # Split into two tensors: inputs and labels
+                inputs = torch.stack([sample['input'].clone().detach() for sample in audiomnist_100_test])
+                # labels = torch.tensor([sample['digit'] for sample in audiomnist_100_test])
+                inputs = inputs.to(device)
+                triggered_inputs = add_trigger(inputs)
+
+                model = load_model()
+                model.to(device)
+
+                model.eval()
+                with torch.no_grad():
+                    outputs = model(inputs)
+                    triggered_outputs = model(triggered_inputs)
+
+                probabilities = torch.softmax(outputs, dim=1)
+                triggered_probabilities = torch.softmax(triggered_outputs, dim=1)
+
+                # Perform independent t-test
+                t_stat, p_value = ttest_ind(probabilities[:, 5].cpu(), triggered_probabilities[:, 5].cpu())
+                print(f"T-statistic: {t_stat}")
+                print(f"P-value: {p_value}")
+                print("Average probability difference", torch.mean(triggered_probabilities[:, 5] - probabilities[:, 5]))
+                plot_probabilities(probabilities, triggered_probabilities)
+
+            if __name__ == '__main__':
+                attack()
+
+            </code></pre>
     </div>
 </body>
